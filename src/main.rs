@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     error::Error,
     fs::File,
-    io::{self, Cursor, Read},
+    io::{self, stdout, BufReader, Cursor, Read, Write},
     net::{TcpListener, TcpStream},
     path::Path,
 };
@@ -10,13 +10,13 @@ use std::{
 const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
 
-fn read_headers_buff(stream: &mut TcpStream) -> Result<Vec<u8>, io::Error> {
+fn read_headers_buff<R: Read>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
     let mut t_bytes_read = 0;
     const END_OF_HEADER: &[u8] = b"\r\n\r\n";
     const READ_SIZE: usize = 1;
-    while res.len() < END_OF_HEADER.len()
-        || &res[t_bytes_read - END_OF_HEADER.len()..t_bytes_read] != END_OF_HEADER
+    while t_bytes_read < END_OF_HEADER.len()
+        || &res[t_bytes_read - END_OF_HEADER.len()..] != END_OF_HEADER
     {
         let mut buff = [0u8; READ_SIZE];
         let bytes_read = stream.read(&mut buff)?;
@@ -61,9 +61,37 @@ fn parse_http(header_lines: &[&str]) -> HttpRequest {
     }
 }
 
-fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
+pub struct TeeWriter<L, R> {
+    left: L,
+    right: R,
+}
+
+impl<L: Write, R: Write> TeeWriter<L, R> {
+    fn new(left: L, right: R) -> Self {
+        Self { left, right }
+    }
+}
+
+impl<L: Write, R: Write> Write for TeeWriter<L, R> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.left.write(&buf[..])?;
+        self.right.write_all(&buf[..n])?;
+        Ok(n)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.left.flush()?;
+        self.right.flush()?;
+        Ok(())
+    }
+}
+
+fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn Error>> {
+    // Split stream to a buffered reader and a writer
+    let mut r_stream = BufReader::new(stream.try_clone()?);
+    let w_stream = stream;
+
     // Read the header
-    let http_request = String::from_utf8_lossy(&read_headers_buff(&mut stream)?).to_string();
+    let http_request = String::from_utf8_lossy(&read_headers_buff(&mut r_stream)?).to_string();
     let http_request: Vec<&str> = http_request
         .lines()
         .take_while(|line| !line.is_empty())
@@ -94,7 +122,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
 
         // Read the body
         let mut buff = vec![0u8; content_length];
-        stream.read_exact(&mut buff)?;
+        r_stream.read_exact(&mut buff)?;
         let body = String::from_utf8_lossy(&buff);
         println!("{}", body);
     }
@@ -127,14 +155,20 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     res_header.push_str(&format!("Content-Length: {}\r\n", res_body_len));
     res_header.push_str("\r\n");
     let mut res = Cursor::new(res_header).chain(res_body);
-    io::copy(&mut res, &mut stream)?;
+
+    // Write to both stream and console
+    let mut tee_writer = TeeWriter::new(w_stream, stdout());
+    io::copy(&mut res, &mut tee_writer)?;
+    println!("");
 
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("0.0.0.0:80")?;
+    println!("socket binded");
     for stream in listener.incoming() {
+        println!("connection accepted");
         let stream = match stream {
             Err(e) => {
                 eprintln!("Error: {}", e);
