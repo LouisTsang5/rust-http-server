@@ -1,9 +1,10 @@
+mod filecache;
 mod teewriter;
 use crate::teewriter::TeeWriter;
 
-use std::{collections::HashMap, io::Cursor, path::Path};
+use filecache::FileCache;
+use std::{collections::HashMap, io::Cursor, path::Path, sync::Arc};
 use tokio::{
-    fs::File,
     io::{self, stdout, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     task,
@@ -72,7 +73,10 @@ fn parse_http(header_lines: &[&str]) -> HttpRequest {
     }
 }
 
-async fn handle_connection(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+async fn handle_connection(
+    stream: &mut TcpStream,
+    file_cache: &FileCache,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Split stream to a buffered reader and a writer
     let (r_stream, w_stream) = stream.split();
     let mut r_stream = BufReader::new(r_stream);
@@ -124,7 +128,7 @@ async fn handle_connection(stream: &mut TcpStream) -> Result<(), Box<dyn std::er
     };
     let path = Path::new(RES_ROOT_FOLDER).join(format!(".{}", &path));
     let file = match path.exists() {
-        true => Some(File::open(path).await?),
+        true => Some(file_cache.open(&path).await?),
         false => None,
     };
 
@@ -145,7 +149,7 @@ async fn handle_connection(stream: &mut TcpStream) -> Result<(), Box<dyn std::er
         // Write the content length
         "Content-Length: {}\r\n",
         match &file {
-            Some(f) => f.metadata().await?.len() as usize,
+            Some(f) => f.len(),
             None => NOT_FOUND_STATUS.len(),
         }
     ));
@@ -155,14 +159,16 @@ async fn handle_connection(stream: &mut TcpStream) -> Result<(), Box<dyn std::er
     let mut res = AsyncReadExt::chain(
         Cursor::new(res),
         match file {
-            Some(f) => Box::new(f) as Box<dyn AsyncRead + Unpin + Send>,
+            Some(f) => Box::new(Cursor::new(f)) as Box<dyn AsyncRead + Unpin + Send>,
             None => Box::new(Cursor::new(NOT_FOUND_MSG)) as Box<dyn AsyncRead + Unpin + Send>,
         },
     );
 
     // Write to both stream and console
-    let mut tee_writer = TeeWriter::new(w_stream, stdout());
+    let mut stdout = stdout();
+    let mut tee_writer = TeeWriter::new(w_stream, &mut stdout);
     io::copy(&mut res, &mut tee_writer).await?;
+    stdout.flush().await?;
     println!("");
 
     Ok(())
@@ -170,6 +176,7 @@ async fn handle_connection(stream: &mut TcpStream) -> Result<(), Box<dyn std::er
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let file_cache = Arc::new(FileCache::new());
     let listener = TcpListener::bind("0.0.0.0:80").await?;
     println!("socket binded");
     loop {
@@ -181,11 +188,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(s) => s,
         };
         println!("connection from: {}", &addr);
+        let file_cache = file_cache.clone();
         task::spawn(async move {
-            if let Err(e) = handle_connection(&mut stream).await {
+            if let Err(e) = handle_connection(&mut stream, &file_cache).await {
                 eprintln!("Error: {}, {}", &addr, e);
             }
-            stream.shutdown().await.unwrap();
+            if let Err(e) = stream.shutdown().await {
+                eprintln!("Error shutting down connection: {}, {}", &addr, e);
+            }
             println!("connection closed for {}", &addr);
         });
     }
