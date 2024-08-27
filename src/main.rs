@@ -1,8 +1,10 @@
 mod filecache;
+mod requestmap;
 mod teewriter;
 use crate::teewriter::TeeWriter;
 
 use filecache::FileCache;
+use requestmap::RequestMap;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -21,17 +23,6 @@ const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
 const REQ_MAP_FILE_DELIM: &str = "=";
-
-struct RequestMap(HashMap<String, PathBuf>);
-impl RequestMap {
-    fn new(map: HashMap<String, PathBuf>) -> Self {
-        Self(map)
-    }
-
-    fn get(&self, k: &str) -> Option<&Path> {
-        self.0.get(k).map(|p| p.as_path())
-    }
-}
 
 async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
