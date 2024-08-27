@@ -150,7 +150,7 @@ async fn handle_connection(
         "Content-Length: {}\r\n",
         match &file {
             Some(f) => f.len(),
-            None => NOT_FOUND_STATUS.len(),
+            None => NOT_FOUND_MSG.len(),
         }
     ));
     res.push_str("\r\n"); // End of header
