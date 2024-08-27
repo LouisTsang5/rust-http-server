@@ -198,9 +198,9 @@ async fn handle_connection(
     // convert header to stream and chain with body of either a file or a string
     let mut res = AsyncReadExt::chain(
         Cursor::new(res),
-        match file {
-            Some(f) => Box::new(Cursor::new(f)) as Box<dyn AsyncRead + Unpin + Send>,
-            None => Box::new(Cursor::new(NOT_FOUND_MSG)) as Box<dyn AsyncRead + Unpin + Send>,
+        match &file {
+            Some(f) => Cursor::new(f.as_ref()),
+            None => Cursor::new(NOT_FOUND_MSG.as_bytes()),
         },
     );
 
