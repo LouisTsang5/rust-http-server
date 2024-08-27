@@ -3,8 +3,15 @@ mod teewriter;
 use crate::teewriter::TeeWriter;
 
 use filecache::FileCache;
-use std::{collections::HashMap, io::Cursor, path::Path, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::{
+    fs::read_to_string,
     io::{self, stdout, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     task,
@@ -12,6 +19,19 @@ use tokio::{
 
 const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
+const REQ_MAP_FILE: &str = "map.txt";
+const REQ_MAP_FILE_DELIM: &str = "=";
+
+struct RequestMap(HashMap<String, PathBuf>);
+impl RequestMap {
+    fn new(map: HashMap<String, PathBuf>) -> Self {
+        Self(map)
+    }
+
+    fn get(&self, k: &str) -> Option<&Path> {
+        self.0.get(k).map(|p| p.as_path())
+    }
+}
 
 async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
@@ -76,6 +96,7 @@ fn parse_http(header_lines: &[&str]) -> HttpRequest {
 async fn handle_connection(
     stream: &mut TcpStream,
     file_cache: &FileCache,
+    request_map: Option<&RequestMap>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Split stream to a buffered reader and a writer
     let (r_stream, w_stream) = stream.split();
@@ -121,16 +142,35 @@ async fn handle_connection(
     // Print a new line
     println!("");
 
-    // Open res file
-    let path = match http_request.path.ends_with("/") {
-        true => format!("{}index", http_request.path),
-        false => http_request.path,
+    // Try to find the file from the map, if not exists, use the http request path as it is
+    let file_path = match request_map {
+        Some(map) => map.get(&http_request.path),
+        None => None,
     };
-    let path = Path::new(RES_ROOT_FOLDER).join(format!(".{}", &path));
-    let file = match path.exists() {
-        true => Some(file_cache.open(&path).await?),
+    let file_path = match file_path {
+        Some(p) => p,
+        None => match http_request.path.starts_with('/') {
+            true => Path::new(&http_request.path[1..]), // Remove the leading slash
+            false => Path::new(&http_request.path),
+        },
+    };
+
+    // Check if the path is a directory, if so, use the index file
+    let file_path = Path::new(RES_ROOT_FOLDER).join(file_path);
+    let file_path = match file_path.is_dir() {
+        true => Cow::Owned(file_path.join("index")),
+        false => Cow::Borrowed(&file_path),
+    };
+
+    // Open res file
+    println!("Opening file: {}", &file_path.as_path().display());
+    let file = match file_path.exists() {
+        true => Some(file_cache.open(&file_path).await?),
         false => None,
     };
+
+    // Print a new line
+    println!("");
 
     // Write the response
     const NOT_FOUND_STATUS: &str = "404 Not Found";
@@ -176,9 +216,38 @@ async fn handle_connection(
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Construct file cache
     let file_cache = Arc::new(FileCache::new());
+
+    // Construct socket
     let listener = TcpListener::bind("0.0.0.0:80").await?;
     println!("socket binded");
+
+    // Construct request map if exists
+    println!("loading request map...");
+    let request_map = match read_to_string(REQ_MAP_FILE).await {
+        Ok(map_file) => {
+            let mut request_map = HashMap::new();
+            for line in map_file.lines() {
+                let (k, v) = line
+                    .split_once(REQ_MAP_FILE_DELIM)
+                    .ok_or("Invalid map file format")?;
+                print!("{} -> {}\n", k, v);
+                request_map.insert(k.to_string(), PathBuf::from(v));
+            }
+            Some(RequestMap::new(request_map))
+        }
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => {
+                println!("No map file found. Starting without request map...");
+                None
+            }
+            _ => return Err(e.into()),
+        },
+    };
+    let request_map = Arc::new(request_map);
+
+    // Main loop
     loop {
         let (mut stream, addr) = match listener.accept().await {
             Err(e) => {
@@ -189,8 +258,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         println!("connection from: {}", &addr);
         let file_cache = file_cache.clone();
+        let request_map = request_map.clone();
         task::spawn(async move {
-            if let Err(e) = handle_connection(&mut stream, &file_cache).await {
+            let request_map = request_map.as_ref().as_ref();
+            let filecache = file_cache.as_ref();
+            if let Err(e) = handle_connection(&mut stream, filecache, request_map).await {
                 eprintln!("Error: {}, {}", &addr, e);
             }
             if let Err(e) = stream.shutdown().await {
