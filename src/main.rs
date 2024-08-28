@@ -5,14 +5,7 @@ use crate::teewriter::tee_write;
 
 use filecache::FileCache;
 use requestmap::RequestMap;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    env,
-    io::Cursor,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{borrow::Cow, collections::HashMap, env, io::Cursor, path::Path, sync::Arc};
 use tokio::{
     fs::read_to_string,
     io::{self, stdout, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -24,7 +17,6 @@ const DEFAULT_PORT: u16 = 80;
 const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
-const REQ_MAP_FILE_DELIM: &str = "=";
 
 async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
@@ -237,15 +229,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("loading request map...");
     let request_map = match read_to_string(REQ_MAP_FILE).await {
         Ok(map_file) => {
-            let mut request_map = HashMap::new();
-            for line in map_file.lines() {
-                let (k, v) = line
-                    .split_once(REQ_MAP_FILE_DELIM)
-                    .ok_or("Invalid map file format")?;
-                print!("{} -> {}\n", k, v);
-                request_map.insert(k.to_string(), PathBuf::from(v));
-            }
-            Some(RequestMap::new(request_map))
+            let map = RequestMap::parse_str(&map_file)?;
+            println!("Map loaded\n{}", &map);
+            Some(map)
         }
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {

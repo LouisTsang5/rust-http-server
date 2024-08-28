@@ -22,13 +22,29 @@ If the mapped file_path is a directory, a read attempt is made to the file named
 
 Request mapping allow the override of the default request path to file path mapping behavior. If the requested path exists in request map, the content of the mapped file is used as the response instead.
 
-To map a request path to a file, create a ```map.txt``` file at the ```PWD```. The format is ```${req_path}=${file_path}```. 
+To use request mapping, create a ```map.txt``` file at the ```PWD```.
 
-For example, ```/req=res.txt``` maps the request path ```/req``` to the file ```./res/res.txt```
+There are two types of mapping. One to one request map and one to many request map
 
-Sample File:
+### Single Request Map (One to One)
+
+To map a request path to a single file, make an entry to the map file with the format of ```${req_path} = ${file_path}```. 
+
+For example, ```/req = res.txt``` maps the request path ```/req``` to the file ```./res/res.txt```
+
+### Multi Request Map (One to Many)
+
+One request path could be mapped to multiple file paths. Each file path has its corresponding relative weight.
+
+To map a request path to multiple files, make an entry to the map file with the format of ```${req_path} = ${file_path}'${weight}[, ]```
+
+For example, ```/req = res1.txt'30, res2.txt'70``` will map the request path ```/req``` to ```res1.txt``` with a ```weight``` of 30 and ```res2.txt``` with a ```weight``` of 70.
+
+When the path is requested, the file path is chosen randomly based on the weight of each provided path. Each ```Weight``` has to be a ***non-zero positive integer***.
+
+### Sample File:
 
 ```
-/req1=res1.txt
-/res2=res2/res.txt
+/req1 = res1.txt
+/res2 = res2.txt'50, res3.txt'50
 ```
