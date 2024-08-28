@@ -1,7 +1,7 @@
 mod filecache;
 mod requestmap;
 mod teewriter;
-use crate::teewriter::TeeWriter;
+use crate::teewriter::tee_write;
 
 use filecache::FileCache;
 use requestmap::RequestMap;
@@ -90,7 +90,7 @@ async fn handle_connection(
     request_map: Option<&RequestMap>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Split stream to a buffered reader and a writer
-    let (r_stream, w_stream) = stream.split();
+    let (r_stream, mut w_stream) = stream.split();
     let mut r_stream = BufReader::new(r_stream);
 
     // Read the header
@@ -197,8 +197,14 @@ async fn handle_connection(
 
     // Write to both stream and console
     let mut stdout = stdout();
-    let mut tee_writer = TeeWriter::new(w_stream, &mut stdout);
-    io::copy(&mut res, &mut tee_writer).await?;
+    tee_write(
+        &mut res,
+        &mut [
+            &mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
+            &mut stdout as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
+        ],
+    )
+    .await?;
     stdout.flush().await?;
     println!("");
 
