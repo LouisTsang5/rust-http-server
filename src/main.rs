@@ -8,6 +8,7 @@ use requestmap::RequestMap;
 use std::{
     borrow::Cow,
     collections::HashMap,
+    env,
     io::Cursor,
     path::{Path, PathBuf},
     sync::Arc,
@@ -19,6 +20,7 @@ use tokio::{
     task,
 };
 
+const DEFAULT_PORT: u16 = 80;
 const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
@@ -217,8 +219,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_cache = Arc::new(FileCache::new());
 
     // Construct socket
-    let listener = TcpListener::bind("0.0.0.0:80").await?;
-    println!("socket binded");
+    let port = match env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .nth(1)
+    {
+        Some(p) => match p.parse::<u16>() {
+            Ok(p) => Some(p),
+            Err(e) => return Err(format!("Invalid port: {}", e).into()),
+        },
+        None => None,
+    };
+    let sockaddr = format!("0.0.0.0:{}", port.unwrap_or(DEFAULT_PORT));
+    let listener = TcpListener::bind(&sockaddr).await?;
+    println!("socket binded @{}", &sockaddr);
 
     // Construct request map if exists
     println!("loading request map...");
