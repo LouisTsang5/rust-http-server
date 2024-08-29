@@ -9,6 +9,8 @@ use requestmap::RequestMap;
 use std::{env, path::Path, sync::Arc};
 use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
 
+// Constants
+const BUFF_INIT_SIZE: usize = 1024; // Referencial init buffer size of all program buffers. All buffers are initialized using multiples of this value.
 const DEFAULT_PORT: u16 = 3006;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";

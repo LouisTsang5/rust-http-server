@@ -15,7 +15,7 @@ use rand::{thread_rng, Rng};
 const REQ_MAP_KEY_VAL_DELIM: char = '=';
 const REQ_MAP_VAL_DELIM: char = ',';
 const REQ_MAP_VAL_WEIGHT_DELIM: char = '\'';
-const STRING_INIT_SIZE: usize = 64;
+const STRING_INIT_SIZE: usize = crate::BUFF_INIT_SIZE / 2;
 
 #[derive(Debug)]
 struct RandPath {

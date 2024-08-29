@@ -7,7 +7,7 @@ use tokio::{
     net::TcpStream,
 };
 
-const HEADER_BUFF_INIT_SIZE: usize = 1024;
+const HEADER_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 
 async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);

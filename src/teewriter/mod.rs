@@ -1,7 +1,7 @@
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-const TEE_WRITER_BUFF_SIZE: usize = 1024;
+const TEE_WRITER_BUFF_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 
 pub async fn tee_write<R: AsyncReadExt + Unpin, W: AsyncWriteExt + Unpin>(
     mut src: R,
