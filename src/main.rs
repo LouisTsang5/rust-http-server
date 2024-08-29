@@ -217,21 +217,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_root: Arc<Path> = file_root.into();
     println!("file root: {}", file_root.display());
 
-    // Construct socket
-    let port = match env::args_os()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .nth(1)
-    {
-        Some(p) => match p.parse::<u16>() {
-            Ok(p) => Some(p),
-            Err(e) => return Err(format!("Invalid port: {}", e).into()),
-        },
-        None => None,
-    };
-    let sockaddr = format!("0.0.0.0:{}", port.unwrap_or(DEFAULT_PORT));
-    let listener = TcpListener::bind(&sockaddr).await?;
-    println!("socket binded @{}", &sockaddr);
-
     // Construct request map if exists
     let request_map = match read_to_string(REQ_MAP_FILE).await {
         Ok(map_file) => {
@@ -248,6 +233,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
     let request_map = Arc::new(request_map);
+
+    // Construct socket
+    let port = match env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .nth(1)
+    {
+        Some(p) => match p.parse::<u16>() {
+            Ok(p) => Some(p),
+            Err(e) => return Err(format!("Invalid port: {}", e).into()),
+        },
+        None => None,
+    };
+    let sockaddr = format!("0.0.0.0:{}", port.unwrap_or(DEFAULT_PORT));
+    let listener = TcpListener::bind(&sockaddr).await?;
+    println!("socket binded @{}", &sockaddr);
 
     // Main loop
     loop {
