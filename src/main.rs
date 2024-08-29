@@ -51,8 +51,7 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
     Ok(Config { file_root, port })
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Get config
     let config = get_config()?;
     println!(
@@ -114,5 +113,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("connection closed for {}", &addr);
         });
+    }
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    if let Err(e) = _main().await {
+        eprintln!("{}", e);
     }
 }
