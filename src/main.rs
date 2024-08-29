@@ -102,10 +102,9 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
         println!("connection from: {}", &addr);
         let ctx = ctx.clone();
         task::spawn(async move {
-            let (file_cache, request_map, res_root) = &*ctx;
-            if let Err(e) =
-                handle_connection(&mut stream, res_root, file_cache, request_map.as_ref()).await
-            {
+            let (f_cache, req_map, res_root) = &*ctx;
+            let req_map = req_map.as_ref();
+            if let Err(e) = handle_connection(&mut stream, res_root, f_cache, req_map).await {
                 eprintln!("Error: {}, {}", &addr, e);
             }
             if let Err(e) = stream.shutdown().await {
