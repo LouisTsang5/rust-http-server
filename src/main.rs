@@ -13,7 +13,7 @@ use tokio::{
     task,
 };
 
-const DEFAULT_PORT: u16 = 80;
+const DEFAULT_PORT: u16 = 3006;
 const HEADER_BUFF_INIT_SIZE: usize = 1024;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
