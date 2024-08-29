@@ -226,7 +226,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("socket binded @{}", &sockaddr);
 
     // Construct request map if exists
-    println!("loading request map...");
     let request_map = match read_to_string(REQ_MAP_FILE).await {
         Ok(map_file) => {
             let map = RequestMap::parse_str(&map_file)?;
