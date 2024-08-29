@@ -80,6 +80,7 @@ fn parse_http(header_lines: &[&str]) -> HttpRequest {
 
 async fn handle_connection(
     stream: &mut TcpStream,
+    res_file_root: &Path,
     file_cache: &FileCache,
     request_map: Option<&RequestMap>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -141,7 +142,7 @@ async fn handle_connection(
     };
 
     // Check if the path is a directory, if so, use the index file
-    let file_path = Path::new(RES_ROOT_FOLDER).join(file_path);
+    let file_path = res_file_root.join(file_path);
     let file_path = match file_path.is_dir() {
         true => Cow::Owned(file_path.join("index")),
         false => Cow::Borrowed(&file_path),
@@ -210,6 +211,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Construct file cache
     let file_cache = Arc::new(FileCache::new());
 
+    // Get the root folder of files
+    let exec_path = env::current_exe()?;
+    let file_root = exec_path.parent().unwrap().join(RES_ROOT_FOLDER);
+    let file_root: Arc<Path> = file_root.into();
+    println!("file root: {}", file_root.display());
+
     // Construct socket
     let port = match env::args_os()
         .map(|arg| arg.to_string_lossy().into_owned())
@@ -254,10 +261,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("connection from: {}", &addr);
         let file_cache = file_cache.clone();
         let request_map = request_map.clone();
+        let file_root = file_root.clone();
         task::spawn(async move {
             let request_map = request_map.as_ref().as_ref();
             let filecache = file_cache.as_ref();
-            if let Err(e) = handle_connection(&mut stream, filecache, request_map).await {
+            if let Err(e) = handle_connection(&mut stream, &file_root, filecache, request_map).await
+            {
                 eprintln!("Error: {}, {}", &addr, e);
             }
             if let Err(e) = stream.shutdown().await {
