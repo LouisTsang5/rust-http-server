@@ -14,17 +14,17 @@ use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
 // Constants
 const BUFF_INIT_SIZE: usize = 1024; // Referencial init buffer size of all program buffers. All buffers are initialized using multiples of this value.
 const DEFAULT_PORT: u16 = 3006;
+const DEFAULT_FILE_CACHE_SIZE: usize = 100 * 1024 * 1024;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
 const ENV_ARG_PORT_KEY: &str = "p";
 const ENV_ARG_FILE_ROOT_KEY: &str = "f";
-
-// TMP CONST
-const CACHE_SIZE_LIMIT: usize = 1024;
+const ENV_ARG_FILE_CACHE_SIZE_KEY: &str = "c";
 
 struct Config {
     file_root: PathBuf,
     port: u16,
+    file_cache_size: usize,
 }
 
 fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
@@ -51,20 +51,48 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
         None => env::current_dir()?,
     };
 
-    Ok(Config { file_root, port })
+    // get file cache size
+    let file_cache_size = match args.get(ENV_ARG_FILE_CACHE_SIZE_KEY) {
+        Some(c) => match c {
+            Some(c) => match c.parse::<usize>() {
+                Ok(c) => c * 1024,
+                Err(e) => return Err(format!("Invalid cache size: {}", e).into()),
+            },
+            None => DEFAULT_FILE_CACHE_SIZE,
+        },
+        None => DEFAULT_FILE_CACHE_SIZE,
+    };
+
+    Ok(Config {
+        file_root,
+        port,
+        file_cache_size,
+    })
+}
+
+fn fmt_size(u: usize) -> String {
+    let mut u = u as f64;
+    let mut i = 0;
+    let units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+    while u >= 1024. && i < units.len() - 1 {
+        u /= 1024.;
+        i += 1;
+    }
+    format!("{:.2} {}", u, units[i])
 }
 
 async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Get config
     let config = get_config()?;
     println!(
-        "port: {}\nfile root: {}",
+        "port: {}\nfile root: {}\nfile cache size: {}",
         config.port,
-        config.file_root.display()
+        config.file_root.display(),
+        fmt_size(config.file_cache_size),
     );
 
     // Construct file cache
-    let file_cache = FileCache::new(Some(CACHE_SIZE_LIMIT));
+    let file_cache = FileCache::new(Some(config.file_cache_size));
 
     // Derive res root folder
     let res_root = config.file_root.join(RES_ROOT_FOLDER);

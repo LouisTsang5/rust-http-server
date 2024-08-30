@@ -16,17 +16,18 @@ The program can be run using the below command.
 
 - ```port``` is the port number to listen for (Default to 3006)
 - ```root_folder``` is the root folder of the prgoram (Default to the executable file's parent)
+- ```file_cache_limit_kb``` is the size limit of the file cache (Default to 10 MB)
 
 ### Linux / Mac
 
-```bash
-./http-server [-p <port>] [-f <root_folder>]
+```
+./http-server [-p <port>] [-f <root_folder>] [-c <file_cache_limit_kb>]
 ```
 
 ### Windows
 
-```powershell
-.\http-server.exe [-p <port>] [-f <root_folder>]
+```
+.\http-server.exe [-p <port>] [-f <root_folder>] [-c <file_cache_limit_kb>]
 ```
 
 ## HTTP Response
