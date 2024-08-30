@@ -141,9 +141,15 @@ pub async fn handle_connection(
 
     // Open res file
     println!("Opening file: {}", &file_path.as_path().display());
-    let file = match file_path.exists() {
-        true => Some(file_cache.open(&file_path).await?),
-        false => None,
+    let mut file = match file_cache.open(&file_path).await {
+        Ok(f) => Some(f),
+        Err(e) => match e.kind() {
+            io::ErrorKind::NotFound => {
+                println!("File not found: {}", &file_path.as_path().display());
+                None
+            }
+            _ => return Err(e.into()),
+        },
     };
 
     // Print a new line
@@ -173,11 +179,12 @@ pub async fn handle_connection(
     res.push_str("\r\n"); // End of header
 
     // convert header to stream and chain with body of either a file or a string
+    let mut not_found_body = Cursor::new(NOT_FOUND_MSG.as_bytes());
     let mut res = AsyncReadExt::chain(
         Cursor::new(res),
-        match &file {
-            Some(f) => Cursor::new(f.as_ref()),
-            None => Cursor::new(NOT_FOUND_MSG.as_bytes()),
+        match &mut file {
+            Some(f) => f as &mut (dyn AsyncRead + Unpin + Send),
+            None => &mut not_found_body,
         },
     );
 

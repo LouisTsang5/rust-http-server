@@ -19,6 +19,9 @@ const REQ_MAP_FILE: &str = "map.txt";
 const ENV_ARG_PORT_KEY: &str = "p";
 const ENV_ARG_FILE_ROOT_KEY: &str = "f";
 
+// TMP CONST
+const CACHE_SIZE_LIMIT: usize = 1024;
+
 struct Config {
     file_root: PathBuf,
     port: u16,
@@ -61,7 +64,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Construct file cache
-    let file_cache = FileCache::new();
+    let file_cache = FileCache::new(Some(CACHE_SIZE_LIMIT));
 
     // Derive res root folder
     let res_root = config.file_root.join(RES_ROOT_FOLDER);
