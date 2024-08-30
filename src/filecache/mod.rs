@@ -25,7 +25,7 @@ impl FileCache {
 
     pub async fn open(&self, path: &Path) -> io::Result<Arc<[u8]>> {
         let mut cached = self.0.read().await.get(path).cloned();
-        let path_str = path.to_string_lossy(); // for logging
+        let path_str = path.display(); // for logging
 
         // Validate the cache entry
         if let Some(e) = &cached {
