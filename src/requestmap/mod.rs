@@ -9,6 +9,8 @@ use std::{
 
 use rand::{thread_rng, Rng};
 
+use crate::{debug, log_ctx};
+
 // Define delimiters
 // Sample of single map entry: /path=path/to/file.txt
 // Sample of weighted map entry: /path=path/to/file1.txt'10,path/to/file2.txt'20
@@ -16,6 +18,8 @@ const REQ_MAP_KEY_VAL_DELIM: char = '=';
 const REQ_MAP_VAL_DELIM: char = ',';
 const REQ_MAP_VAL_WEIGHT_DELIM: char = '\'';
 const STRING_INIT_SIZE: usize = crate::BUFF_INIT_SIZE / 2;
+
+log_ctx!("RequestMap");
 
 #[derive(Debug)]
 struct RandPath {
@@ -166,6 +170,7 @@ impl RequestMap {
 
                 // Generate a random number
                 let mut rand_num = thread_rng().gen_range(0..total_weight);
+                debug!("Random number: {}", rand_num);
 
                 // Choose a path based on random number
                 for rp in p {

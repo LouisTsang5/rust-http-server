@@ -12,9 +12,10 @@ use tokio::{
     sync::{RwLock, RwLockWriteGuard},
 };
 
-use crate::debug;
+use crate::{debug, log_ctx};
 
 const FILE_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
+log_ctx!("FileCache");
 
 #[derive(Clone, Debug)]
 struct CacheEntry {

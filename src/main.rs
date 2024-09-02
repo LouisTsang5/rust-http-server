@@ -24,6 +24,7 @@ const ENV_ARG_PORT_KEY: &str = "p";
 const ENV_ARG_FILE_ROOT_KEY: &str = "f";
 const ENV_ARG_FILE_CACHE_SIZE_KEY: &str = "c";
 const ENV_ARG_LOG_LEVEL_KEY: &str = "l";
+log_ctx!("Main");
 
 struct Config {
     file_root: PathBuf,

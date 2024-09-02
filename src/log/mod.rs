@@ -59,9 +59,16 @@ pub fn get_log_level() -> LogLevel {
 }
 
 #[macro_export]
+macro_rules! log_ctx {
+    ($ctx:expr) => {
+        const _LOG_CTX_JK23BN4KJ2: &str = $ctx;
+    };
+}
+
+#[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        eprint!("[{}][ERROR] ", module_path!());
+        eprint!("[{}][ERROR] ", _LOG_CTX_JK23BN4KJ2);
         eprintln!($($arg)*);
     };
 }
@@ -70,7 +77,7 @@ macro_rules! error {
 macro_rules! warn {
     ($($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Warn) {
-            print!("[{}][WARN] ", module_path!());
+            print!("[{}][WARN] ", _LOG_CTX_JK23BN4KJ2);
             println!($($arg)*);
         }
     };
@@ -80,7 +87,7 @@ macro_rules! warn {
 macro_rules! info {
     ($($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Info) {
-            print!("[{}][INFO] ", module_path!());
+            print!("[{}][INFO] ", _LOG_CTX_JK23BN4KJ2);
             println!($($arg)*);
         }
     };
@@ -90,7 +97,7 @@ macro_rules! info {
 macro_rules! debug {
     ($($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Debug) {
-            print!("[{}][DEBUG] ", module_path!());
+            print!("[{}][DEBUG] ", _LOG_CTX_JK23BN4KJ2);
             println!($($arg)*);
         }
     };
@@ -100,7 +107,7 @@ macro_rules! debug {
 macro_rules! trace {
     ($($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Trace) {
-            print!("[{}][TRACE] ", module_path!());
+            print!("[{}][TRACE] ", _LOG_CTX_JK23BN4KJ2);
             println!($($arg)*);
         }
     };

@@ -2,7 +2,7 @@ use crate::filecache::FileCache;
 use crate::log::{get_log_level, LogLevel};
 use crate::requestmap::RequestMap;
 use crate::teewriter::tee_write;
-use crate::{info, trace};
+use crate::{info, log_ctx, trace};
 use std::net::SocketAddr;
 use std::{borrow::Cow, collections::HashMap, io::Cursor, path::Path};
 use tokio::{
@@ -11,6 +11,7 @@ use tokio::{
 };
 
 const HEADER_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
+log_ctx!("HTTP");
 
 async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
