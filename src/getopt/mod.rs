@@ -1,16 +1,23 @@
-use std::{collections::HashMap, env};
+use std::{borrow::Cow, collections::HashMap, env, ffi::OsStr};
 
 const ENV_ARG_FLAG_PREFIX: &str = "-";
 
 enum ArgType<'a> {
-    Flag(&'a str),
-    Value(&'a str),
+    Flag(Cow<'a, str>),
+    Value(Cow<'a, str>),
 }
 
 impl<'a> ArgType<'a> {
-    fn parse(s: &'a str) -> Self {
+    fn parse(s: &'a OsStr) -> Self {
+        let s = s.to_string_lossy();
         if s.starts_with(ENV_ARG_FLAG_PREFIX) {
-            ArgType::Flag(&s[1..])
+            match s {
+                Cow::Borrowed(s) => ArgType::Flag(Cow::Borrowed(&s[1..])),
+                Cow::Owned(mut s) => {
+                    s.drain(..1); // Remove flag prefix
+                    ArgType::Flag(Cow::Owned(s))
+                }
+            }
         } else {
             ArgType::Value(s)
         }
@@ -43,12 +50,9 @@ impl std::error::Error for GetOptError {
 }
 
 pub fn getopt() -> Result<HashMap<String, Option<String>>, GetOptError> {
-    let args: Vec<String> = env::args_os()
-        .skip(1)
-        .map(|arg| arg.to_string_lossy().into())
-        .collect();
+    let args = env::args_os().skip(1).collect::<Vec<_>>();
     let mut args_map: HashMap<String, Option<String>> = HashMap::new();
-    let mut cur_flag: Option<&str> = None;
+    let mut cur_flag = None;
     for arg in &args {
         let arg: ArgType = ArgType::parse(&arg);
         match cur_flag {
