@@ -4,6 +4,7 @@ mod http;
 mod log;
 mod requestmap;
 mod teewriter;
+mod util;
 
 use filecache::FileCache;
 use getopt::getopt;
@@ -12,6 +13,7 @@ use log::LogLevel;
 use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
 use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
+use util::fmt_size;
 
 // Constants
 const BUFF_INIT_SIZE: usize = 1024; // Referencial init buffer size of all program buffers. All buffers are initialized using multiples of this value.
@@ -84,17 +86,6 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
         file_cache_size,
         log_level,
     })
-}
-
-fn fmt_size(u: usize) -> String {
-    let mut u = u as f64;
-    let mut i = 0;
-    let units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-    while u >= 1024. && i < units.len() - 1 {
-        u /= 1024.;
-        i += 1;
-    }
-    format!("{:.2} {}", u, units[i])
 }
 
 async fn _main() -> Result<(), Box<dyn std::error::Error>> {
