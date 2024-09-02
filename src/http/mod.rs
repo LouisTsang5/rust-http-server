@@ -1,6 +1,9 @@
 use crate::filecache::FileCache;
+use crate::log::{get_log_level, LogLevel};
 use crate::requestmap::RequestMap;
 use crate::teewriter::tee_write;
+use crate::{info, trace};
+use std::net::SocketAddr;
 use std::{borrow::Cow, collections::HashMap, io::Cursor, path::Path};
 use tokio::{
     io::{self, stdout, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -70,6 +73,7 @@ fn parse_http(header_lines: &[&str]) -> HttpRequest {
 }
 
 pub async fn handle_connection(
+    sockaddr: &SocketAddr,
     stream: &mut TcpStream,
     res_file_root: &Path,
     file_cache: &FileCache,
@@ -87,37 +91,42 @@ pub async fn handle_connection(
         .take_while(|line| !line.is_empty())
         .collect();
     let http_request = parse_http(&http_request);
-    println!(
-        "{} {} {}",
-        &http_request.method, &http_request.path, &http_request.protocol
-    );
-    for (key, val) in &http_request.headers {
-        println!("{}: {}", key, val);
-    }
 
-    // Read the body if request is POST
-    if &http_request.method == "POST" {
-        // Line break for body
-        println!("");
-
-        // Get content length
-        let content_length = http_request.headers.get("Content-Length");
-        if let None = content_length {
-            return Err("Cannot find content length".into());
+    // Log request if trace is enabled
+    if get_log_level() <= LogLevel::Trace {
+        let mut msg = format!(
+            "\n{} {} {}\n",
+            &http_request.method, &http_request.path, &http_request.protocol
+        );
+        for (key, val) in &http_request.headers {
+            msg.push_str(&format!("{}: {}\n", key, val));
         }
-        let content_length = match content_length.unwrap().parse::<usize>() {
-            Ok(l) => l,
-            Err(e) => return Err(format!("Failed read content length: {}", e).into()),
-        };
 
-        // Read the body
-        let mut buff = vec![0u8; content_length];
-        r_stream.read_exact(&mut buff).await?;
-        let body = String::from_utf8_lossy(&buff);
-        println!("{}", body);
+        // Read the body if request is POST
+        if &http_request.method == "POST" {
+            // Line break for body
+            msg.push_str("\n");
+
+            // Get content length
+            let content_length = http_request.headers.get("Content-Length");
+            if let None = content_length {
+                return Err("Cannot find content length".into());
+            }
+            let content_length = match content_length.unwrap().parse::<usize>() {
+                Ok(l) => l,
+                Err(e) => return Err(format!("Failed read content length: {}", e).into()),
+            };
+
+            // Read the body
+            let mut buff = vec![0u8; content_length];
+            r_stream.read_exact(&mut buff).await?;
+            let body = String::from_utf8_lossy(&buff);
+            msg.push_str(&body);
+        }
+
+        // Print the request
+        trace!("{}", msg);
     }
-    // Print a new line
-    println!("");
 
     // Try to find the file from the map, if not exists, use the http request path as it is
     let file_path = match request_map {
@@ -140,33 +149,31 @@ pub async fn handle_connection(
     };
 
     // Open res file
-    println!("Opening file: {}", &file_path.as_path().display());
+    trace!("Opening file: {}", &file_path.as_path().display());
     let mut file = match file_cache.open(&file_path).await {
         Ok(f) => Some(f),
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => {
-                println!("File not found: {}", &file_path.as_path().display());
+                trace!("File not found: {}", &file_path.as_path().display());
                 None
             }
             _ => return Err(e.into()),
         },
     };
 
-    // Print a new line
-    println!("");
-
     // Write the response
     const NOT_FOUND_STATUS: &str = "404 Not Found";
     const NOT_FOUND_MSG: &str = "NOT FOUND";
     const OK_STATUS: &str = "200 OK";
     let mut res = String::with_capacity(HEADER_BUFF_INIT_SIZE);
+    let res_status = match &file {
+        Some(_) => OK_STATUS,
+        None => NOT_FOUND_STATUS,
+    };
     res.push_str(&format!(
         // Write the status line
         "HTTP/1.1 {}\r\n",
-        match &file {
-            Some(_) => OK_STATUS,
-            None => NOT_FOUND_STATUS,
-        }
+        res_status
     ));
     res.push_str(&format!(
         // Write the content length
@@ -189,17 +196,31 @@ pub async fn handle_connection(
     );
 
     // Write to both stream and console
-    let mut stdout = stdout();
-    tee_write(
-        &mut res,
-        &mut [
-            &mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-            &mut stdout as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-        ],
-    )
-    .await?;
-    stdout.flush().await?;
-    println!("");
+    if get_log_level() <= LogLevel::Trace {
+        // Copy to stdout only if trace is enabled
+        trace!("");
+        let mut stdout = stdout();
+        tee_write(
+            &mut res,
+            &mut [
+                &mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
+                &mut stdout as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
+            ],
+        )
+        .await?;
+        // Write a new line to stdout
+        stdout.write(b"\n").await?;
+        stdout.flush().await?;
+    } else {
+        // Copy to output stream only
+        io::copy(&mut res, &mut w_stream).await?;
+    }
+
+    // Log the request & response
+    info!(
+        "{} {} {} -> {}",
+        sockaddr, &http_request.method, &http_request.path, res_status
+    );
 
     Ok(())
 }

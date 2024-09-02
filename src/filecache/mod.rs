@@ -12,6 +12,8 @@ use tokio::{
     sync::{RwLock, RwLockWriteGuard},
 };
 
+use crate::debug;
+
 const FILE_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 
 #[derive(Clone, Debug)]
@@ -104,7 +106,7 @@ impl FileCache {
         let removed = write_guard.cache.remove(path);
         if let Some(r) = &removed {
             write_guard.cur_size -= r.data.len();
-            println!(
+            debug!(
                 "Cache entry removed for {}, current cache size: {}.",
                 path.display(),
                 write_guard.cur_size
@@ -139,7 +141,7 @@ impl FileCache {
 
         // Return Err if new entry cannot be inserted
         if !can_insert {
-            println!(
+            debug!(
                 "Cache entry cannot be inserted for {}, cache size limit reached. Current cache size: {}. New entry size: {}.",
                 path.display(),
                 write_guard.cur_size,
@@ -160,7 +162,7 @@ impl FileCache {
         };
         write_guard.cache.insert(path.into(), new_entry.clone());
 
-        println!(
+        debug!(
             "Cache entry inserted for {}, current cache size: {}.",
             path.display(),
             write_guard.cur_size
@@ -176,14 +178,14 @@ impl FileCache {
 
         // Validate the cache entry
         if let Some(e) = &cached {
-            println!("Cache hit for {}.", &path_str);
+            debug!("Cache hit for {}.", &path_str);
 
             // Get file metadata
             let f_metadata = metadata(path).await;
 
             // Remove the cached entry if the file is not found
             if let Err(e) = f_metadata {
-                println!(
+                debug!(
                     "Cache file not found for {}, removing cache entry...",
                     &path_str
                 );
@@ -194,7 +196,7 @@ impl FileCache {
 
             // Remove the cached entry if the file has been modified
             if e.last_accessed < f_metadata.modified()? {
-                println!(
+                debug!(
                     "Cache file expired for {}, removing cache entry...",
                     &path_str
                 );
@@ -205,12 +207,12 @@ impl FileCache {
 
         // Return the cached file if it exists and is valid
         if let Some(e) = cached {
-            println!("Cache valid for {}, using cached file...", &path_str);
+            debug!("Cache valid for {}, using cached file...", &path_str);
             return Ok(AbstractFile::from(e.data));
         }
 
         // Read the file into cache
-        println!("Cache miss for {}, reading file...", &path_str);
+        debug!("Cache miss for {}, reading file...", &path_str);
         let mut file = File::open(path).await?;
         let f_size = file.metadata().await?.len() as usize;
         let retval = match self.insert(path.into(), &mut file, f_size).await {

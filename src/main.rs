@@ -1,12 +1,14 @@
 mod filecache;
 mod getopt;
 mod http;
+mod log;
 mod requestmap;
 mod teewriter;
 
 use filecache::FileCache;
 use getopt::getopt;
 use http::handle_connection;
+use log::LogLevel;
 use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
 use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
@@ -15,16 +17,19 @@ use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
 const BUFF_INIT_SIZE: usize = 1024; // Referencial init buffer size of all program buffers. All buffers are initialized using multiples of this value.
 const DEFAULT_PORT: u16 = 3006;
 const DEFAULT_FILE_CACHE_SIZE: usize = 100 * 1024 * 1024;
+const DEFAULT_LOG_LEVEL: LogLevel = LogLevel::Info;
 const RES_ROOT_FOLDER: &str = "res";
 const REQ_MAP_FILE: &str = "map.txt";
 const ENV_ARG_PORT_KEY: &str = "p";
 const ENV_ARG_FILE_ROOT_KEY: &str = "f";
 const ENV_ARG_FILE_CACHE_SIZE_KEY: &str = "c";
+const ENV_ARG_LOG_LEVEL_KEY: &str = "l";
 
 struct Config {
     file_root: PathBuf,
     port: u16,
     file_cache_size: usize,
+    log_level: LogLevel,
 }
 
 fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
@@ -63,10 +68,20 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
         None => DEFAULT_FILE_CACHE_SIZE,
     };
 
+    // get log level
+    let log_level = match args.get(ENV_ARG_LOG_LEVEL_KEY) {
+        Some(l) => match l {
+            Some(l) => LogLevel::from(l),
+            None => DEFAULT_LOG_LEVEL,
+        },
+        None => DEFAULT_LOG_LEVEL,
+    };
+
     Ok(Config {
         file_root,
         port,
         file_cache_size,
+        log_level,
     })
 }
 
@@ -84,11 +99,17 @@ fn fmt_size(u: usize) -> String {
 async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Get config
     let config = get_config()?;
-    println!(
-        "port: {}\nfile root: {}\nfile cache size: {}",
+
+    // Set log level
+    log::set_log_level(config.log_level)?;
+
+    // Log config
+    info!(
+        "Config:\nport -> {}\nfile root -> {}\nfile cache size -> {}\nlog level -> {}",
         config.port,
         config.file_root.display(),
         fmt_size(config.file_cache_size),
+        config.log_level
     );
 
     // Construct file cache
@@ -101,12 +122,12 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     let request_map = match read_to_string(REQ_MAP_FILE).await {
         Ok(map_file) => {
             let map = RequestMap::parse_str(&map_file)?;
-            println!("Map loaded\n{}", &map);
+            info!("Map loaded\n{}", &map);
             Some(map)
         }
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
-                println!("No map file found. Starting without request map...");
+                info!("No map file found. Starting without request map...");
                 None
             }
             _ => return Err(e.into()),
@@ -116,7 +137,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Construct socket
     let sockaddr = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&sockaddr).await?;
-    println!("socket binded @{}", &sockaddr);
+    info!("socket binded @{}", &sockaddr);
 
     // Construct context for main loop
     let ctx = Arc::new((file_cache, request_map, res_root));
@@ -125,23 +146,24 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (mut stream, addr) = match listener.accept().await {
             Err(e) => {
-                eprintln!("Client connection error: {}", e);
+                error!("Client connection error: {}", e);
                 continue;
             }
             Ok(s) => s,
         };
-        println!("connection from: {}", &addr);
+        debug!("connection from: {}", &addr);
         let ctx = ctx.clone();
         task::spawn(async move {
             let (f_cache, req_map, res_root) = &*ctx;
             let req_map = req_map.as_ref();
-            if let Err(e) = handle_connection(&mut stream, res_root, f_cache, req_map).await {
-                eprintln!("Error: {}, {}", &addr, e);
+            if let Err(e) = handle_connection(&addr, &mut stream, res_root, f_cache, req_map).await
+            {
+                error!("Error: {}, {}", &addr, e);
             }
             if let Err(e) = stream.shutdown().await {
-                eprintln!("Error shutting down connection: {}, {}", &addr, e);
+                error!("Error shutting down connection: {}, {}", &addr, e);
             }
-            println!("connection closed for {}", &addr);
+            debug!("connection closed for {}", &addr);
         });
     }
 }
@@ -149,6 +171,6 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     if let Err(e) = _main().await {
-        eprintln!("{}", e);
+        error!("{}", e);
     }
 }
