@@ -9,7 +9,7 @@ use std::{
 
 use rand::{thread_rng, Rng};
 
-use crate::{debug, log_ctx};
+use crate::{debug, log_ctx, timer};
 
 // Define delimiters
 // Sample of single map entry: /path=path/to/file.txt
@@ -155,6 +155,7 @@ impl RequestMap {
     }
 
     pub fn get(&self, k: &str) -> Option<&Path> {
+        timer!("RequestMap::get");
         self.map.get(k).map(|p| match p {
             // Return path directly if it is single
             PathEntry::Single(p) => p.as_path(),

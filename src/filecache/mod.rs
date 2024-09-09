@@ -12,7 +12,7 @@ use tokio::{
     sync::{RwLock, RwLockWriteGuard},
 };
 
-use crate::{debug, log_ctx};
+use crate::{debug, log_ctx, timer};
 
 const FILE_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 log_ctx!("FileCache");
@@ -174,6 +174,7 @@ impl FileCache {
     }
 
     pub async fn open(&self, path: &Path) -> io::Result<AbstractFile> {
+        timer!("FileCache::open");
         let mut cached = self.get(path).await;
         let path_str = path.display(); // for logging
 

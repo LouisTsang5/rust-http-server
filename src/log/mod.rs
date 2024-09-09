@@ -112,3 +112,43 @@ macro_rules! trace {
         }
     };
 }
+
+#[macro_export]
+macro_rules! timer {
+    ($ctx:expr) => {
+        let _timer_jk23_bn4_kj2 =
+            if crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Debug {
+                Some(crate::log::Timer::new(_LOG_CTX_JK23BN4KJ2, $ctx))
+            } else {
+                None
+            };
+    };
+}
+
+pub struct Timer<'a> {
+    start: std::time::Instant,
+    log_ctx: &'a str,
+    timer_ctx: &'a str,
+}
+
+impl<'a> Timer<'a> {
+    pub fn new(log_ctx: &'a str, timer_ctx: &'a str) -> Self {
+        Self {
+            start: std::time::Instant::now(),
+            log_ctx,
+            timer_ctx,
+        }
+    }
+}
+
+impl Drop for Timer<'_> {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed();
+        println!(
+            "[{}][DEBUG][{}] elipsed {}μs",
+            self.log_ctx,
+            self.timer_ctx,
+            elapsed.as_micros()
+        );
+    }
+}
