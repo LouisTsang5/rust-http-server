@@ -5,6 +5,7 @@ use crate::teewriter::tee_write;
 use crate::{info, log_ctx, trace};
 use std::net::SocketAddr;
 use std::{borrow::Cow, collections::HashMap, io::Cursor, path::Path};
+use tokio::io::AsyncBufReadExt;
 use tokio::{
     io::{self, stdout, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
@@ -13,27 +14,46 @@ use tokio::{
 const HEADER_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 log_ctx!("HTTP");
 
-async fn read_headers_buff<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Vec<u8>, io::Error> {
+async fn read_headers_buff<R: AsyncBufReadExt + Unpin>(
+    stream: &mut R,
+) -> Result<Vec<u8>, io::Error> {
     let mut res = Vec::with_capacity(HEADER_BUFF_INIT_SIZE);
-    let mut t_bytes_read = 0;
     const END_OF_HEADER: &[u8] = b"\r\n\r\n";
-    const READ_SIZE: usize = 1;
-    while t_bytes_read < END_OF_HEADER.len()
-        || &res[t_bytes_read - END_OF_HEADER.len()..] != END_OF_HEADER
-    {
-        let mut buff = [0u8; READ_SIZE];
-        let bytes_read = stream.read(&mut buff).await?;
+    let mut eoh_index = 0;
+    loop {
+        // Fill the buffer
+        let buff = stream.fill_buf().await?;
 
-        // Check if end of file
-        if bytes_read <= 0 {
+        // Check if the buffer is empty
+        if buff.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "Unexpected end of file",
             ));
         }
 
-        t_bytes_read += bytes_read;
-        res.extend_from_slice(&buff);
+        // Check if the buffer contains the end of header
+        let mut is_done = false;
+        let mut consume_size = buff.len();
+        for (i, &b) in buff.iter().enumerate() {
+            if b == END_OF_HEADER[eoh_index] {
+                eoh_index += 1;
+                if eoh_index == END_OF_HEADER.len() {
+                    consume_size = i + 1;
+                    is_done = true;
+                    break;
+                }
+            } else {
+                eoh_index = 0;
+            }
+        }
+        res.extend_from_slice(&buff[..consume_size]);
+        stream.consume(consume_size);
+
+        // Break if the end of header is found
+        if is_done {
+            break;
+        }
     }
     Ok(res)
 }
@@ -82,7 +102,7 @@ pub async fn handle_connection(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Split stream to a buffered reader and a writer
     let (r_stream, mut w_stream) = stream.split();
-    let mut r_stream = BufReader::new(r_stream);
+    let mut r_stream = BufReader::with_capacity(HEADER_BUFF_INIT_SIZE, r_stream);
 
     // Read the header
     let header_buff = read_headers_buff(&mut r_stream).await?;
