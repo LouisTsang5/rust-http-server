@@ -3,6 +3,8 @@ use crate::log::{get_log_level, LogLevel};
 use crate::requestmap::RequestMap;
 use crate::teewriter::tee_write;
 use crate::{info, log_ctx, trace};
+use std::error::Error;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::{borrow::Cow, collections::HashMap, io::Cursor, path::Path};
 use tokio::io::AsyncBufReadExt;
@@ -58,38 +60,93 @@ async fn read_headers_buff<R: AsyncBufReadExt + Unpin>(
     Ok(res)
 }
 
-struct HttpRequest {
-    method: String,
-    path: String,
-    protocol: String,
-    headers: HashMap<String, String>,
+struct HttpRequest<'a> {
+    method: &'a str,
+    path: &'a str,
+    protocol: &'a str,
+    headers: HashMap<&'a str, &'a str>,
 }
 
-fn parse_http(header_lines: &[&str]) -> HttpRequest {
-    // Parse the start line
-    let (method, path, protocol) = {
-        let start_line_items: Vec<&str> = header_lines[0].split(' ').collect();
-        (
-            start_line_items[0].to_string(),
-            start_line_items[1].to_string(),
-            start_line_items[2].to_string(),
-        )
-    };
+#[derive(Debug)]
+enum ParseHttpError {
+    EmptyStartLine,
+    InvalidStartLine(String),
+    InvalidHeader(String),
+}
 
-    // Parse the headers
-    let mut headers = HashMap::new();
-    for line in &header_lines[1..] {
-        let key_val: Vec<&str> = line.split(':').collect();
-        let key = key_val[0].trim().to_string();
-        let val = key_val[1].trim().to_string();
-        headers.insert(key, val);
+impl Display for ParseHttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseHttpError::EmptyStartLine => {
+                write!(f, "Failed to parse HTTP request. Empty start-line")
+            }
+            ParseHttpError::InvalidStartLine(s) => {
+                write!(f, "Failed to parse HTTP request. Invalid start-line: {}", s)
+            }
+            ParseHttpError::InvalidHeader(s) => {
+                write!(f, "Failed to parse HTTP request. Invalid header: {}", s)
+            }
+        }
+    }
+}
+
+impl Error for ParseHttpError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
     }
 
-    HttpRequest {
-        method,
-        path,
-        protocol,
-        headers,
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
+
+    fn cause(&self) -> Option<&dyn Error> {
+        self.source()
+    }
+}
+
+impl<'a> HttpRequest<'a> {
+    fn parse(raw_str: &'a str) -> Result<Self, ParseHttpError> {
+        // Construct iterator
+        let mut header_lines = raw_str.lines().take_while(|l| !l.is_empty());
+
+        // Parse start Line
+        let start_line_items = header_lines.next().ok_or(ParseHttpError::EmptyStartLine)?;
+        let mut start_line_items = start_line_items.split(' ');
+        let method = start_line_items
+            .next()
+            .ok_or(ParseHttpError::InvalidStartLine(
+                "Missing HTTP method".into(),
+            ))?;
+        let path = start_line_items
+            .next()
+            .ok_or(ParseHttpError::InvalidStartLine("Missing HTTP path".into()))?;
+        let protocol = start_line_items
+            .next()
+            .ok_or(ParseHttpError::InvalidStartLine(
+                "Missing HTTP version".into(),
+            ))?;
+
+        // Parse headers
+        let mut headers = HashMap::new();
+        for line in header_lines {
+            let mut key_val = line.split(':');
+            let key = key_val
+                .next()
+                .ok_or(ParseHttpError::InvalidHeader(line.to_string()))?
+                .trim();
+            let val = key_val
+                .next()
+                .ok_or(ParseHttpError::InvalidHeader(line.to_string()))?
+                .trim();
+            headers.insert(key, val);
+        }
+
+        Ok(HttpRequest {
+            method,
+            path,
+            protocol,
+            headers,
+        })
     }
 }
 
@@ -106,12 +163,8 @@ pub async fn handle_connection(
 
     // Read the header
     let header_buff = read_headers_buff(&mut r_stream).await?;
-    let http_request = String::from_utf8_lossy(&header_buff);
-    let http_request: Vec<&str> = http_request
-        .lines()
-        .take_while(|line| !line.is_empty())
-        .collect();
-    let http_request = parse_http(&http_request);
+    let http_request = String::from_utf8(header_buff)?;
+    let http_request = HttpRequest::parse(&http_request)?;
 
     // Log request if trace is enabled
     if get_log_level() <= LogLevel::Trace {
@@ -124,7 +177,7 @@ pub async fn handle_connection(
         }
 
         // Read the body if request is POST
-        if &http_request.method == "POST" {
+        if http_request.method == "POST" {
             // Line break for body
             msg.push_str("\n");
 
