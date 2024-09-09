@@ -157,6 +157,8 @@ pub async fn handle_connection(
     file_cache: &FileCache,
     request_map: Option<&RequestMap>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let start = std::time::Instant::now();
+
     // Split stream to a buffered reader and a writer
     let (r_stream, mut w_stream) = stream.split();
     let mut r_stream = BufReader::with_capacity(HEADER_BUFF_INIT_SIZE, r_stream);
@@ -292,8 +294,12 @@ pub async fn handle_connection(
 
     // Log the request & response
     info!(
-        "{} {} {} -> {}",
-        sockaddr, &http_request.method, &http_request.path, res_status
+        "{} {} {} -> {} [{}μs]",
+        sockaddr,
+        &http_request.method,
+        &http_request.path,
+        res_status,
+        start.elapsed().as_micros()
     );
 
     Ok(())
