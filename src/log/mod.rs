@@ -68,8 +68,10 @@ macro_rules! log_ctx {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        eprint!("[{}][ERROR] ", _LOG_CTX_JK23BN4KJ2);
-        eprintln!($($arg)*);
+        {
+            eprint!("[{}][ERROR] ", _LOG_CTX_JK23BN4KJ2);
+            eprintln!($($arg)*);
+        }
     };
 }
 
