@@ -259,6 +259,7 @@ pub async fn handle_connection(
             None => NOT_FOUND_MSG.len(),
         }
     ));
+    res.push_str("Connection: close\r\n"); // Close the connection
     res.push_str("\r\n"); // End of header
 
     // convert header to stream and chain with body of either a file or a string
