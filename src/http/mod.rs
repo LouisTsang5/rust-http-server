@@ -168,6 +168,29 @@ pub async fn handle_connection(
     let http_request = String::from_utf8(header_buff)?;
     let http_request = HttpRequest::parse(&http_request)?;
 
+    // Read the body if request is POST
+    let body_buff = if http_request.method == "POST" {
+        // Get content length
+        let content_length = http_request.headers.get("Content-Length");
+        if let None = content_length {
+            return Err("Cannot find content length".into());
+        }
+        let content_length = match content_length.unwrap().parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => return Err(format!("Failed read content length: {}", e).into()),
+        };
+
+        // Read the body
+        let mut buff = Vec::with_capacity(content_length);
+        for _ in 0..content_length {
+            buff.push(0);
+        }
+        r_stream.read_exact(&mut buff).await?;
+        Some(buff)
+    } else {
+        None
+    };
+
     // Log request if trace is enabled
     if get_log_level() <= LogLevel::Trace {
         let mut msg = format!(
@@ -179,24 +202,12 @@ pub async fn handle_connection(
         }
 
         // Read the body if request is POST
-        if http_request.method == "POST" {
+        if let Some(body_buff) = body_buff {
             // Line break for body
             msg.push_str("\n");
 
-            // Get content length
-            let content_length = http_request.headers.get("Content-Length");
-            if let None = content_length {
-                return Err("Cannot find content length".into());
-            }
-            let content_length = match content_length.unwrap().parse::<usize>() {
-                Ok(l) => l,
-                Err(e) => return Err(format!("Failed read content length: {}", e).into()),
-            };
-
-            // Read the body
-            let mut buff = vec![0u8; content_length];
-            r_stream.read_exact(&mut buff).await?;
-            let body = String::from_utf8_lossy(&buff);
+            // // Read the body
+            let body = String::from_utf8_lossy(&body_buff);
             msg.push_str(&body);
         }
 
