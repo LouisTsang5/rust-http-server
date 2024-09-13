@@ -1,4 +1,5 @@
 mod filecache;
+mod fswatcher;
 mod getopt;
 mod http;
 mod log;
@@ -7,18 +8,18 @@ mod teewriter;
 mod util;
 
 use filecache::FileCache;
+use fswatcher::setup_fs_watcher;
 use getopt::getopt;
 use http::handle_connection;
 use log::LogLevel;
-use notify::Watcher;
 use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
 use tokio::{
     fs::read_to_string,
     io::AsyncWriteExt,
     net::TcpListener,
-    sync::mpsc::{self, Receiver},
-    task,
+    select,
+    task::{self},
 };
 use util::fmt_size;
 
@@ -95,15 +96,6 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
     })
 }
 
-fn async_watcher() -> notify::Result<(
-    notify::RecommendedWatcher,
-    Receiver<notify::Result<notify::Event>>,
-)> {
-    let (tx, rx) = mpsc::channel(BUFF_INIT_SIZE);
-    let watcher = notify::recommended_watcher(move |res| tx.blocking_send(res).unwrap())?;
-    Ok((watcher, rx))
-}
-
 async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Get config
     let config = get_config()?;
@@ -151,59 +143,19 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = Arc::new((file_cache, request_map, res_root));
 
     // Watcher event
-    let (mut watcher, mut rx) = async_watcher()?;
-    {
-        let ctx = ctx.clone();
-        tokio::spawn(async move {
-            let (file_cache, _, res_root) = ctx.as_ref();
-            if let Err(err) = watcher.watch(res_root, notify::RecursiveMode::Recursive) {
-                error!("Error watching directory: {}", err);
-            }
-            while let Some(e) = rx.recv().await {
-                match e {
-                    Ok(event) => {
-                        trace!("Folder event: {:?}", event);
-                        match event.kind {
-                            notify::EventKind::Modify(_) => {
-                                for path in event.paths {
-                                    trace!(
-                                        "{} modified. Attempting to remove it from cache...",
-                                        path.display()
-                                    );
-                                    if let Some(_) = file_cache.remove(&path).await {
-                                        debug!(
-                                            "Cache entry {} removed due to file modification",
-                                            path.display()
-                                        );
-                                    }
-                                }
-                            }
-                            notify::EventKind::Remove(_) => {
-                                for path in event.paths {
-                                    trace!(
-                                        "{} modified. Attempting to remove it from cache...",
-                                        path.display()
-                                    );
-                                    if let Some(_) = file_cache.remove(&path).await {
-                                        debug!(
-                                            "Cache entry {} removed due to file delete",
-                                            path.display()
-                                        );
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    Err(err) => error!("Error watching directory: {}", err),
-                }
-            }
-        });
-    }
+    let watcher_handle = setup_fs_watcher(ctx.clone())?;
+    tokio::pin!(watcher_handle); // pin handle in order for main loop to poll it
 
     // Main loop
     loop {
-        let (mut stream, addr) = match listener.accept().await {
+        // Select between watcher error and listener connection
+        let conn = select! {
+            res = &mut watcher_handle => Err(res?.unwrap_err()),
+            conn = listener.accept() => Ok(conn),
+        }?;
+
+        // Accept connection
+        let (mut stream, addr) = match conn {
             Err(e) => {
                 error!("Client connection error: {}", e);
                 continue;
