@@ -12,7 +12,7 @@ use http::handle_connection;
 use log::LogLevel;
 use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::{fs::read_to_string, io::AsyncWriteExt, net::TcpListener, task};
+use tokio::{fs::read_to_string, net::TcpListener, task};
 use util::fmt_size;
 
 // Constants
@@ -136,7 +136,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Main loop
     loop {
-        let (mut stream, addr) = match listener.accept().await {
+        let (stream, addr) = match listener.accept().await {
             Err(e) => {
                 error!("Client connection error: {}", e);
                 continue;
@@ -148,12 +148,8 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
         task::spawn(async move {
             let (f_cache, req_map, res_root) = &*ctx;
             let req_map = req_map.as_ref();
-            if let Err(e) = handle_connection(&addr, &mut stream, res_root, f_cache, req_map).await
-            {
+            if let Err(e) = handle_connection(&addr, stream, res_root, f_cache, req_map).await {
                 error!("Error: {}, {}", &addr, e);
-            }
-            if let Err(e) = stream.shutdown().await {
-                error!("Error shutting down connection: {}, {}", &addr, e);
             }
             debug!("connection closed for {}", &addr);
         });

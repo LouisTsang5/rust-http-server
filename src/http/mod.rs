@@ -152,7 +152,7 @@ impl<'a> HttpRequest<'a> {
 
 pub async fn handle_connection(
     sockaddr: &SocketAddr,
-    stream: &mut TcpStream,
+    mut stream: TcpStream,
     res_file_root: &Path,
     file_cache: &FileCache,
     request_map: Option<&RequestMap>,
@@ -271,25 +271,28 @@ pub async fn handle_connection(
         },
     );
 
-    // Write to both stream and console
-    if get_log_level() <= LogLevel::Trace {
+    // declare output streams
+    let mut ostreams = vec![&mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send)];
+
+    // Copy to stdout only if trace is enabled
+    let mut stdout = match get_log_level() <= LogLevel::Trace {
+        true => Some(stdout()),
+        false => None,
+    };
+    if let Some(stdout) = &mut stdout {
         // Copy to stdout only if trace is enabled
         trace!("");
-        let mut stdout = stdout();
-        tee_write(
-            &mut res,
-            &mut [
-                &mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-                &mut stdout as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-            ],
-        )
-        .await?;
+        ostreams.push(stdout);
+    }
+    tee_write(&mut res, &mut ostreams).await?;
+
+    // Flush and shutdown the stream
+    stream.flush().await?;
+    stream.shutdown().await?;
+    if let Some(stdout) = &mut stdout {
         // Write a new line to stdout
         stdout.write(b"\n").await?;
         stdout.flush().await?;
-    } else {
-        // Copy to output stream only
-        io::copy(&mut res, &mut w_stream).await?;
     }
 
     // Log the request & response
