@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
-    // time::SystemTime,
 };
 use tokio::{
     fs::File,
@@ -20,7 +19,6 @@ log_ctx!("FileCache");
 #[derive(Clone, Debug)]
 pub struct CacheEntry {
     data: Arc<[u8]>,
-    // last_accessed: SystemTime,
 }
 
 struct FileCacheInner {
