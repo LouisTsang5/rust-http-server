@@ -16,7 +16,6 @@ use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
 use tokio::{
     fs::read_to_string,
-    io::AsyncWriteExt,
     net::TcpListener,
     select,
     task::{self},
