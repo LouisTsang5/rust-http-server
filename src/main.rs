@@ -154,7 +154,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
         }?;
 
         // Accept connection
-        let (mut stream, addr) = match conn {
+        let (stream, addr) = match conn {
             Err(e) => {
                 error!("Client connection error: {}", e);
                 continue;
