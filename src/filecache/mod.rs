@@ -4,10 +4,9 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
-    time::SystemTime,
 };
 use tokio::{
-    fs::{metadata, File},
+    fs::File,
     io::{self, AsyncRead, AsyncReadExt},
     sync::{RwLock, RwLockWriteGuard},
 };
@@ -18,9 +17,8 @@ const FILE_BUFF_INIT_SIZE: usize = crate::BUFF_INIT_SIZE * 8;
 log_ctx!("FileCache");
 
 #[derive(Clone, Debug)]
-struct CacheEntry {
+pub struct CacheEntry {
     data: Arc<[u8]>,
-    last_accessed: SystemTime,
 }
 
 struct FileCacheInner {
@@ -116,7 +114,7 @@ impl FileCache {
         removed
     }
 
-    async fn remove(&self, path: &Path) -> Option<CacheEntry> {
+    pub async fn remove(&self, path: &Path) -> Option<CacheEntry> {
         let mut write_guard = self.0.write().await;
         self._remove(path, &mut write_guard)
     }
@@ -157,10 +155,7 @@ impl FileCache {
 
         // insert new entry
         write_guard.cur_size += buf.len();
-        let new_entry = CacheEntry {
-            data: buf.into(),
-            last_accessed: SystemTime::now(),
-        };
+        let new_entry = CacheEntry { data: buf.into() };
         write_guard.cache.insert(path.into(), new_entry.clone());
 
         debug!(
@@ -175,37 +170,8 @@ impl FileCache {
 
     pub async fn open(&self, path: &Path) -> io::Result<AbstractFile> {
         timer!("FileCache::open");
-        let mut cached = self.get(path).await;
+        let cached = self.get(path).await;
         let path_str = path.display(); // for logging
-
-        // Validate the cache entry
-        if let Some(e) = &cached {
-            debug!("Cache hit for {}.", &path_str);
-
-            // Get file metadata
-            let f_metadata = metadata(path).await;
-
-            // Remove the cached entry if the file is not found
-            if let Err(e) = f_metadata {
-                debug!(
-                    "Cache file not found for {}, removing cache entry...",
-                    &path_str
-                );
-                self.remove(path).await;
-                return Err(e); // Return the error
-            }
-            let f_metadata = f_metadata.unwrap();
-
-            // Remove the cached entry if the file has been modified
-            if e.last_accessed < f_metadata.modified()? {
-                debug!(
-                    "Cache file expired for {}, removing cache entry...",
-                    &path_str
-                );
-                self.remove(path).await;
-                cached = None; // Set cached to None
-            }
-        }
 
         // Return the cached file if it exists and is valid
         if let Some(e) = cached {

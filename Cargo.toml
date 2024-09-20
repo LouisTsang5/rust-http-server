@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.39.2", features = ["full"] }
 rand = { version = "0.8.5", features = ["std_rng"] }
+notify = "6.1.1"

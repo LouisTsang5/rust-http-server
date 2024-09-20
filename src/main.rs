@@ -1,4 +1,5 @@
 mod filecache;
+mod fswatcher;
 mod getopt;
 mod http;
 mod log;
@@ -7,12 +8,18 @@ mod teewriter;
 mod util;
 
 use filecache::FileCache;
+use fswatcher::setup_fs_watcher;
 use getopt::getopt;
 use http::handle_connection;
 use log::LogLevel;
 use requestmap::RequestMap;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::{fs::read_to_string, net::TcpListener, task};
+use tokio::{
+    fs::read_to_string,
+    net::TcpListener,
+    select,
+    task::{self},
+};
 use util::fmt_size;
 
 // Constants
@@ -108,7 +115,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     let file_cache = FileCache::new(Some(config.file_cache_size));
 
     // Derive res root folder
-    let res_root = config.file_root.join(RES_ROOT_FOLDER);
+    let res_root = config.file_root.join(RES_ROOT_FOLDER).canonicalize()?;
 
     // Construct request map if exists
     let request_map = match read_to_string(REQ_MAP_FILE).await {
@@ -134,9 +141,20 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     // Construct context for main loop
     let ctx = Arc::new((file_cache, request_map, res_root));
 
+    // Watcher event
+    let watcher_handle = setup_fs_watcher(ctx.clone())?;
+    tokio::pin!(watcher_handle); // pin handle in order for main loop to poll it
+
     // Main loop
     loop {
-        let (stream, addr) = match listener.accept().await {
+        // Select between watcher error and listener connection
+        let conn = select! {
+            res = &mut watcher_handle => Err(res?.unwrap_err()),
+            conn = listener.accept() => Ok(conn),
+        }?;
+
+        // Accept connection
+        let (stream, addr) = match conn {
             Err(e) => {
                 error!("Client connection error: {}", e);
                 continue;
@@ -144,7 +162,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(s) => s,
         };
         debug!("connection from: {}", &addr);
-        let ctx = ctx.clone();
+        let ctx: Arc<(FileCache, Option<RequestMap>, PathBuf)> = ctx.clone();
         task::spawn(async move {
             let (f_cache, req_map, res_root) = &*ctx;
             let req_map = req_map.as_ref();
