@@ -152,7 +152,7 @@ impl<'a> HttpRequest<'a> {
 
 pub async fn handle_connection(
     sockaddr: &SocketAddr,
-    stream: &mut TcpStream,
+    mut stream: TcpStream,
     res_file_root: &Path,
     file_cache: &FileCache,
     request_map: Option<&RequestMap>,
@@ -168,6 +168,26 @@ pub async fn handle_connection(
     let http_request = String::from_utf8(header_buff)?;
     let http_request = HttpRequest::parse(&http_request)?;
 
+    // Read the body if request is POST
+    let body_buff = if http_request.method == "POST" {
+        // Get content length
+        let content_length = http_request.headers.get("Content-Length");
+        if let None = content_length {
+            return Err("Cannot find content length".into());
+        }
+        let content_length = match content_length.unwrap().parse::<usize>() {
+            Ok(l) => l,
+            Err(e) => return Err(format!("Failed read content length: {}", e).into()),
+        };
+
+        // Read the body
+        let mut buff = vec![0; content_length];
+        r_stream.read_exact(&mut buff).await?;
+        Some(buff)
+    } else {
+        None
+    };
+
     // Log request if trace is enabled
     if get_log_level() <= LogLevel::Trace {
         let mut msg = format!(
@@ -179,24 +199,12 @@ pub async fn handle_connection(
         }
 
         // Read the body if request is POST
-        if http_request.method == "POST" {
+        if let Some(body_buff) = body_buff {
             // Line break for body
             msg.push_str("\n");
 
-            // Get content length
-            let content_length = http_request.headers.get("Content-Length");
-            if let None = content_length {
-                return Err("Cannot find content length".into());
-            }
-            let content_length = match content_length.unwrap().parse::<usize>() {
-                Ok(l) => l,
-                Err(e) => return Err(format!("Failed read content length: {}", e).into()),
-            };
-
-            // Read the body
-            let mut buff = vec![0u8; content_length];
-            r_stream.read_exact(&mut buff).await?;
-            let body = String::from_utf8_lossy(&buff);
+            // // Read the body
+            let body = String::from_utf8_lossy(&body_buff);
             msg.push_str(&body);
         }
 
@@ -260,6 +268,7 @@ pub async fn handle_connection(
             None => NOT_FOUND_MSG.len(),
         }
     ));
+    res.push_str("Connection: close\r\n"); // Close the connection
     res.push_str("\r\n"); // End of header
 
     // convert header to stream and chain with body of either a file or a string
@@ -272,25 +281,28 @@ pub async fn handle_connection(
         },
     );
 
-    // Write to both stream and console
-    if get_log_level() <= LogLevel::Trace {
+    // declare output streams
+    let mut ostreams = vec![&mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send)];
+
+    // Copy to stdout only if trace is enabled
+    let mut stdout = match get_log_level() <= LogLevel::Trace {
+        true => Some(stdout()),
+        false => None,
+    };
+    if let Some(stdout) = &mut stdout {
         // Copy to stdout only if trace is enabled
         trace!("");
-        let mut stdout = stdout();
-        tee_write(
-            &mut res,
-            &mut [
-                &mut w_stream as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-                &mut stdout as &mut (dyn tokio::io::AsyncWrite + Unpin + Send),
-            ],
-        )
-        .await?;
+        ostreams.push(stdout);
+    }
+    tee_write(&mut res, &mut ostreams).await?;
+
+    // Flush and shutdown the stream
+    stream.flush().await?;
+    stream.shutdown().await?;
+    if let Some(stdout) = &mut stdout {
         // Write a new line to stdout
         stdout.write(b"\n").await?;
         stdout.flush().await?;
-    } else {
-        // Copy to output stream only
-        io::copy(&mut res, &mut w_stream).await?;
     }
 
     // Log the request & response

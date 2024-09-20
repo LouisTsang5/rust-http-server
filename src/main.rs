@@ -167,12 +167,8 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
         task::spawn(async move {
             let (f_cache, req_map, res_root) = &*ctx;
             let req_map = req_map.as_ref();
-            if let Err(e) = handle_connection(&addr, &mut stream, res_root, f_cache, req_map).await
-            {
+            if let Err(e) = handle_connection(&addr, stream, res_root, f_cache, req_map).await {
                 error!("Error: {}, {}", &addr, e);
-            }
-            if let Err(e) = stream.shutdown().await {
-                error!("Error shutting down connection: {}, {}", &addr, e);
             }
             debug!("connection closed for {}", &addr);
         });
