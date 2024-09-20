@@ -233,7 +233,7 @@ pub async fn handle_connection(
     };
 
     // Open res file
-    let file_path = file_path.canonicalize()?;
+    let file_path = file_path;
     trace!("Opening file: {}", &file_path.as_path().display());
     let mut file = match file_cache.open(&file_path).await {
         Ok(f) => Some(f),

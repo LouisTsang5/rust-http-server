@@ -115,7 +115,7 @@ async fn _main() -> Result<(), Box<dyn std::error::Error>> {
     let file_cache = FileCache::new(Some(config.file_cache_size));
 
     // Derive res root folder
-    let res_root = config.file_root.join(RES_ROOT_FOLDER);
+    let res_root = config.file_root.join(RES_ROOT_FOLDER).canonicalize()?;
 
     // Construct request map if exists
     let request_map = match read_to_string(REQ_MAP_FILE).await {
