@@ -181,10 +181,7 @@ pub async fn handle_connection(
         };
 
         // Read the body
-        let mut buff = Vec::with_capacity(content_length);
-        for _ in 0..content_length {
-            buff.push(0);
-        }
+        let mut buff = vec![0; content_length];
         r_stream.read_exact(&mut buff).await?;
         Some(buff)
     } else {
