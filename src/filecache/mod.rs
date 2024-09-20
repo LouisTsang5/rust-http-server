@@ -155,10 +155,7 @@ impl FileCache {
 
         // insert new entry
         write_guard.cur_size += buf.len();
-        let new_entry = CacheEntry {
-            data: buf.into(),
-            // last_accessed: SystemTime::now(),
-        };
+        let new_entry = CacheEntry { data: buf.into() };
         write_guard.cache.insert(path.into(), new_entry.clone());
 
         debug!(
