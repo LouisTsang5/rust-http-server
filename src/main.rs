@@ -47,44 +47,32 @@ fn get_config() -> Result<Config, Box<dyn std::error::Error>> {
 
     // get port
     let port = match args.get(ENV_ARG_PORT_KEY) {
-        Some(p) => match p {
-            Some(p) => match p.parse::<u16>() {
-                Ok(p) => p,
-                Err(e) => return Err(format!("Invalid port: {}", e).into()),
-            },
-            None => DEFAULT_PORT,
+        Some(Some(p)) => match p.parse::<u16>() {
+            Ok(p) => p,
+            Err(e) => return Err(format!("Invalid port: {}", e).into()),
         },
-        None => DEFAULT_PORT,
+        _ => DEFAULT_PORT,
     };
 
     // get file root
     let file_root = match args.get(ENV_ARG_FILE_ROOT_KEY) {
-        Some(f) => match f {
-            Some(f) => PathBuf::from(f),
-            None => env::current_dir()?,
-        },
-        None => env::current_dir()?,
+        Some(Some(f)) => PathBuf::from(f),
+        _ => env::current_dir()?,
     };
 
     // get file cache size
     let file_cache_size = match args.get(ENV_ARG_FILE_CACHE_SIZE_KEY) {
-        Some(c) => match c {
-            Some(c) => match c.parse::<usize>() {
-                Ok(c) => c * 1024,
-                Err(e) => return Err(format!("Invalid cache size: {}", e).into()),
-            },
-            None => DEFAULT_FILE_CACHE_SIZE,
+        Some(Some(c)) => match c.parse::<usize>() {
+            Ok(c) => c * 1024,
+            Err(e) => return Err(format!("Invalid cache size: {}", e).into()),
         },
-        None => DEFAULT_FILE_CACHE_SIZE,
+        _ => DEFAULT_FILE_CACHE_SIZE,
     };
 
     // get log level
     let log_level = match args.get(ENV_ARG_LOG_LEVEL_KEY) {
-        Some(l) => match l {
-            Some(l) => LogLevel::from(l),
-            None => DEFAULT_LOG_LEVEL,
-        },
-        None => DEFAULT_LOG_LEVEL,
+        Some(Some(l)) => LogLevel::from(l),
+        _ => DEFAULT_LOG_LEVEL,
     };
 
     Ok(Config {
