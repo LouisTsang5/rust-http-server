@@ -67,50 +67,53 @@ macro_rules! log_ctx {
 
 #[macro_export]
 macro_rules! error {
-    ($($arg:tt)*) => {
-        {
-            eprint!("[{}][ERROR] ", _LOG_CTX_JK23BN4KJ2);
-            eprintln!($($arg)*);
-        }
+    ($arg0: tt, $($arg:tt)*) => {
+        eprintln!(concat!("[{}][ERROR] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
     };
 }
 
 #[macro_export]
 macro_rules! warn {
-    ($($arg:tt)*) => {
+    ($arg0: tt, $($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Warn) {
-            print!("[{}][WARN] ", _LOG_CTX_JK23BN4KJ2);
-            println!($($arg)*);
+            println!(concat!("[{}][WARN] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
 }
 
 #[macro_export]
 macro_rules! info {
-    ($($arg:tt)*) => {
+    ($arg0: tt) => {
+    if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Info) {
+            println!(concat!("[{}][INFO] ",$arg0), _LOG_CTX_JK23BN4KJ2);
+        }
+    };
+    ($arg0: tt, $($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Info) {
-            print!("[{}][INFO] ", _LOG_CTX_JK23BN4KJ2);
-            println!($($arg)*);
+            println!(concat!("[{}][INFO] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
 }
 
 #[macro_export]
 macro_rules! debug {
-    ($($arg:tt)*) => {
+    ($arg0: tt, $($arg:tt)*) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Debug) {
-            print!("[{}][DEBUG] ", _LOG_CTX_JK23BN4KJ2);
-            println!($($arg)*);
+            println!(concat!("[{}][DEBUG] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
 }
 
 #[macro_export]
 macro_rules! trace {
-    ($($arg:tt)*) => {
+    ($arg0: tt) => {
         if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Trace) {
-            print!("[{}][TRACE] ", _LOG_CTX_JK23BN4KJ2);
-            println!($($arg)*);
+            println!(concat!("[{}][TRACE] ",$arg0), _LOG_CTX_JK23BN4KJ2);
+        }
+    };
+    ($arg0: tt, $($arg:tt)*) => {
+        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Trace) {
+            println!(concat!("[{}][TRACE] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
 }
