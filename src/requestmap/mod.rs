@@ -190,14 +190,14 @@ impl Display for RequestMap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (k, v) in &self.map {
             match v {
-                PathEntry::Single(p) => write!(f, "{} -> {}\n", k, p.display())?,
+                PathEntry::Single(p) => writeln!(f, "{} -> {}", k, p.display())?,
                 PathEntry::Weighted(p) => {
                     let mut line = String::with_capacity(STRING_INIT_SIZE);
                     line.push_str(&format!("{} -> ", k));
                     for rp in p {
                         line.push_str(&format!("{}'{} ", rp.path.display(), rp.weight));
                     }
-                    write!(f, "{}\n", line)?;
+                    writeln!(f, "{}", line)?;
                 }
             }
         }

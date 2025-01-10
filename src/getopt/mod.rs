@@ -54,7 +54,7 @@ pub fn getopt() -> Result<HashMap<String, Option<String>>, GetOptError> {
     let mut args_map: HashMap<String, Option<String>> = HashMap::new();
     let mut cur_flag = None;
     for arg in &args {
-        let arg: ArgType = ArgType::parse(&arg);
+        let arg: ArgType = ArgType::parse(arg);
         match cur_flag {
             None => match arg {
                 ArgType::Flag(f) => cur_flag = Some(f), // Update cur flag

@@ -17,7 +17,7 @@ pub async fn tee_write<R: AsyncReadExt + Unpin, W: AsyncWriteExt + Unpin>(
         let bytes_read = src.read(&mut buf).await?;
 
         // Break if eof
-        if bytes_read <= 0 {
+        if bytes_read == 0 {
             break;
         }
 

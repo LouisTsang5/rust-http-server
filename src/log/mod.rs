@@ -75,7 +75,7 @@ macro_rules! error {
 #[macro_export]
 macro_rules! warn {
     ($arg0: tt, $($arg:tt)*) => {
-        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Warn) {
+        if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Warn) {
             println!(concat!("[{}][WARN] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
@@ -84,12 +84,12 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! info {
     ($arg0: tt) => {
-    if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Info) {
+    if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Info) {
             println!(concat!("[{}][INFO] ",$arg0), _LOG_CTX_JK23BN4KJ2);
         }
     };
     ($arg0: tt, $($arg:tt)*) => {
-        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Info) {
+        if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Info) {
             println!(concat!("[{}][INFO] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
@@ -98,7 +98,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! debug {
     ($arg0: tt, $($arg:tt)*) => {
-        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Debug) {
+        if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Debug) {
             println!(concat!("[{}][DEBUG] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
@@ -107,12 +107,12 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! trace {
     ($arg0: tt) => {
-        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Trace) {
+        if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Trace) {
             println!(concat!("[{}][TRACE] ",$arg0), _LOG_CTX_JK23BN4KJ2);
         }
     };
     ($arg0: tt, $($arg:tt)*) => {
-        if (crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Trace) {
+        if ($crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Trace) {
             println!(concat!("[{}][TRACE] ",$arg0), _LOG_CTX_JK23BN4KJ2, $($arg)*);
         }
     };
@@ -122,8 +122,8 @@ macro_rules! trace {
 macro_rules! timer {
     ($ctx:expr) => {
         let _timer_jk23_bn4_kj2 =
-            if crate::log::LOG_LEVEL.get().copied().unwrap() <= crate::log::LogLevel::Debug {
-                Some(crate::log::Timer::new(_LOG_CTX_JK23BN4KJ2, $ctx))
+            if $crate::log::LOG_LEVEL.get().copied().unwrap() <= $crate::log::LogLevel::Debug {
+                Some($crate::log::Timer::new(_LOG_CTX_JK23BN4KJ2, $ctx))
             } else {
                 None
             };

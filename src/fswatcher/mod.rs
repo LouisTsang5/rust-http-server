@@ -76,7 +76,7 @@ pub fn setup_fs_watcher(
             if let Some(event) = event {
                 for path in event.paths {
                     let removed = file_cache.remove(&path).await;
-                    if let Some(_) = removed {
+                    if removed.is_some() {
                         trace!("Removed {} from file cache", path.display());
                     }
                 }
