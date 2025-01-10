@@ -172,7 +172,7 @@ pub async fn handle_connection(
     let body_buff = if http_request.method == "POST" {
         // Get content length
         let content_length = http_request.headers.get("Content-Length");
-        if let None = content_length {
+        if content_length.is_none() {
             return Err("Cannot find content length".into());
         }
         let content_length = match content_length.unwrap().parse::<usize>() {
@@ -192,16 +192,16 @@ pub async fn handle_connection(
     if get_log_level() <= LogLevel::Trace {
         let mut msg = format!(
             "\n{} {} {}\n",
-            &http_request.method, &http_request.path, &http_request.protocol
+            http_request.method, http_request.path, http_request.protocol
         );
-        for (key, val) in &http_request.headers {
+        for (key, val) in http_request.headers {
             msg.push_str(&format!("{}: {}\n", key, val));
         }
 
         // Read the body if request is POST
         if let Some(body_buff) = body_buff {
             // Line break for body
-            msg.push_str("\n");
+            msg.push('\n');
 
             // // Read the body
             let body = String::from_utf8_lossy(&body_buff);
@@ -214,7 +214,7 @@ pub async fn handle_connection(
 
     // Try to find the file from the map, if not exists, use the http request path as it is
     let file_path = match request_map {
-        Some(map) => map.get(&http_request.path),
+        Some(map) => map.get(http_request.path),
         None => None,
     };
     let file_path = match file_path {
@@ -296,11 +296,10 @@ pub async fn handle_connection(
     tee_write(&mut res, &mut ostreams).await?;
 
     // Flush and shutdown the stream
-    stream.flush().await?;
     stream.shutdown().await?;
     if let Some(stdout) = &mut stdout {
         // Write a new line to stdout
-        stdout.write(b"\n").await?;
+        stdout.write_all(b"\n").await?;
         stdout.flush().await?;
     }
 

@@ -183,7 +183,7 @@ impl FileCache {
         debug!("Cache miss for {}, reading file...", &path_str);
         let mut file = File::open(path).await?;
         let f_size = file.metadata().await?.len() as usize;
-        let retval = match self.insert(path.into(), &mut file, f_size).await {
+        let retval = match self.insert(path, &mut file, f_size).await {
             Ok(cached) => Ok(AbstractFile::from(cached.new_entry.data)),
             Err(e) => match e {
                 FileCacheInsertError::IoError(e) => Err(e),
